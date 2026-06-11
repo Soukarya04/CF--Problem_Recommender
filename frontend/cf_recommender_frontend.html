@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CF Recommender</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #18181f;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --accent: #7c6af7;
+    --accent2: #a78bfa;
+    --accent-glow: rgba(124,106,247,0.15);
+    --text: #f0eeff;
+    --text2: #9891b8;
+    --text3: #5a5475;
+    --green: #34d399;
+    --green-bg: rgba(52,211,153,0.1);
+    --amber: #fbbf24;
+    --amber-bg: rgba(251,191,36,0.1);
+    --red: #f87171;
+    --red-bg: rgba(248,113,113,0.1);
+    --mono: 'Space Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--display);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .noise {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: 0.4;
+  }
+
+  .orb {
+    position: fixed; border-radius: 50%; pointer-events: none; z-index: 0;
+    filter: blur(80px);
+  }
+  .orb1 { width: 500px; height: 500px; background: rgba(124,106,247,0.08); top: -100px; right: -100px; }
+  .orb2 { width: 400px; height: 400px; background: rgba(52,211,153,0.05); bottom: -50px; left: -80px; }
+
+  .app { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 2rem; }
+
+  header {
+    padding: 3rem 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 0.5px solid var(--border);
+    margin-bottom: 3rem;
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .logo-mark {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--accent); display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 14px; font-weight: 700; color: #fff;
+    letter-spacing: -1px;
+  }
+  .logo-text { font-size: 15px; font-weight: 700; letter-spacing: 0.05em; color: var(--text); }
+  .logo-sub { font-size: 11px; color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; font-family: var(--mono); }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 100px;
+    border: 0.5px solid var(--border2);
+    font-size: 12px; font-family: var(--mono); color: var(--text2);
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+  .hero { margin-bottom: 3rem; }
+  .hero h1 {
+    font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 750;
+    line-height: 1.05; letter-spacing: -0.03em;
+    margin-bottom: 1rem;
+  }
+  .hero h1 span { color: var(--accent2); }
+  .hero p { font-size: 1rem; color: var(--text2); max-width: 480px; line-height: 1.7; font-weight: 400; }
+
+  .search-bar {
+    display: flex; gap: 12px; margin-top: 2rem; max-width: 560px;
+  }
+  .search-input {
+    flex: 1; background: var(--surface); border: 0.5px solid var(--border2);
+    border-radius: 12px; padding: 14px 20px;
+    font-family: var(--mono); font-size: 14px; color: var(--text);
+    outline: none; transition: border-color 0.2s;
+  }
+  .search-input::placeholder { color: var(--text3); }
+  .search-input:focus { border-color: var(--accent); }
+
+  .search-btn {
+    background: var(--accent); border: none; border-radius: 12px;
+    padding: 14px 28px; font-family: var(--display); font-size: 14px;
+    font-weight: 700; color: #fff; cursor: pointer; white-space: nowrap;
+    transition: opacity 0.2s, transform 0.1s;
+    letter-spacing: 0.02em;
+  }
+  .search-btn:hover { opacity: 0.85; }
+  .search-btn:active { transform: scale(0.97); }
+  .search-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .grid { display: grid; grid-template-columns: 1fr 340px; gap: 2rem; align-items: start; }
+
+  .section-label {
+    font-size: 11px; font-family: var(--mono); color: var(--text3);
+    letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 1rem;
+    display: flex; align-items: center; gap: 8px;
+  }
+  /* .section-label::after { content: ''; flex: 1; height: 0.5px; background: var(--border); } */
+
+  .problems-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .problem-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 14px; padding: 16px 20px;
+    display: grid; grid-template-columns: 48px 1fr auto;
+    align-items: center; gap: 16px;
+    transition: border-color 0.2s, background 0.2s;
+    cursor: pointer; text-decoration: none;
+    animation: fadeUp 0.3s ease both;
+  }
+  .problem-card:hover { border-color: var(--border2); background: var(--surface2); }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .problem-rank {
+    font-family: var(--mono); font-size: 11px; color: var(--text3);
+    text-align: center;
+  }
+  .problem-rank-num { font-size: 20px; font-weight: 700; color: var(--text2); display: block; line-height: 1; }
+
+  .problem-pid {
+    font-family: var(--mono); font-size: 13px; color: var(--accent2);
+    margin-bottom: 4px;
+  }
+  .problem-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .tag {
+    font-size: 10px; font-family: var(--mono); padding: 2px 8px;
+    border-radius: 100px; border: 0.5px solid var(--border2);
+    color: var(--text3); letter-spacing: 0.03em;
+  }
+  .tag.weak { border-color: rgba(124,106,247,0.3); color: var(--accent2); background: var(--accent-glow); }
+
+  .problem-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .rating-badge {
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    padding: 4px 10px; border-radius: 8px;
+  }
+  .mode-badge {
+    font-size: 9px; font-family: var(--mono); letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 2px 8px; border-radius: 100px;
+  }
+  .mode-exploit { background: var(--accent-glow); color: var(--accent2); border: 0.5px solid rgba(124,106,247,0.25); }
+  .mode-explore { background: var(--green-bg); color: var(--green); border: 0.5px solid rgba(52,211,153,0.25); }
+
+  .feedback-btns { display: flex; gap: 6px; margin-top: 8px; }
+  .fb-btn {
+    font-size: 10px; font-family: var(--mono); padding: 3px 10px;
+    border-radius: 6px; border: 0.5px solid var(--border2);
+    background: transparent; color: var(--text2); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .fb-btn.solved:hover { background: var(--green-bg); border-color: var(--green); color: var(--green); }
+  .fb-btn.skipped:hover { background: var(--red-bg); border-color: var(--red); color: var(--red); }
+  .fb-btn.active-solved { background: var(--green-bg); border-color: var(--green); color: var(--green); }
+  .fb-btn.active-skipped { background: var(--red-bg); border-color: var(--red); color: var(--red); }
+
+  .sidebar { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  .card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 16px; padding: 20px;
+  }
+
+  .profile-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .avatar {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: var(--accent-glow); border: 0.5px solid rgba(124,106,247,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--accent2);
+  }
+  .profile-name { font-size: 15px; font-weight: 700; }
+  .profile-rating { font-size: 12px; color: var(--text2); font-family: var(--mono); margin-top: 2px; }
+
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 0.5px solid var(--border);
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { font-size: 12px; color: var(--text2); }
+  .stat-value { font-size: 13px; font-family: var(--mono); font-weight: 700; color: var(--text); }
+
+  .weak-tag-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 0; border-bottom: 0.5px solid var(--border);
+  }
+  .weak-tag-row:last-child { border-bottom: none; }
+  .weak-tag-name { font-size: 11px; font-family: var(--mono); color: var(--text2); flex: 1; }
+  .weak-bar-bg { width: 60px; height: 3px; background: var(--border2); border-radius: 2px; }
+  .weak-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); }
+  .weak-pct { font-size: 10px; font-family: var(--mono); color: var(--text3); min-width: 36px; text-align: right; }
+
+  .empty-state {
+    text-align: center; padding: 4rem 2rem;
+    color: var(--text3); font-size: 13px; font-family: var(--mono);
+    border: 0.5px dashed var(--border2); border-radius: 16px;
+  }
+  .empty-icon { font-size: 2rem; margin-bottom: 1rem; opacity: 0.3; }
+
+  .loading { display: flex; flex-direction: column; gap: 10px; }
+  .skeleton {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 14px; height: 78px;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .error-msg {
+    background: var(--red-bg); border: 0.5px solid rgba(248,113,113,0.2);
+    border-radius: 12px; padding: 14px 20px;
+    font-size: 13px; font-family: var(--mono); color: var(--red);
+  }
+
+  .score-bar { display: flex; align-items: center; gap: 6px; }
+  .score-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--accent); }
+
+  @media (max-width: 700px) {
+    .grid { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 2.2rem; }
+  }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="logo-mark">CF</div>
+      <div>
+        <div class="logo-text">Recommender</div>
+        <div class="logo-sub">Codeforces · AI Powered</div>
+      </div>
+    </div>
+    <div class="status-pill">
+      <div class="status-dot"></div>
+      API Connected
+    </div>
+  </header>
+
+  <div class="hero">
+    <div style="display:flex;align-items:flex-start;gap:3rem">
+      <div style="flex:1">
+        <h1>One problem<br /><span>closer</span></h1>
+        <p>Problems tailored to your weak tags, current rating, and recent activity — powered by UCB1 bandit learning.</p>
+        <div class="search-bar">
+          <input class="search-input" id="handleInput" type="text" placeholder="Enter CF handle..." />
+          <button class="search-btn" id="searchBtn" onclick="fetchAll()">Analyse →</button>
+        </div>
+      </div>
+      <div style="width:300px;height:260px;position:relative;overflow:hidden;flex-shrink:0" id="floatingCards"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="section-label">Recommended Problems</div>
+      <div id="problemsContainer">
+        <div class="empty-state">
+          <div class="empty-icon">⌬</div>
+          Enter your Codeforces handle to get started
+        </div>
+      </div>
+    </div>
+    <div class="sidebar">
+      <div class="section-label">Profile<div style="flex:1;height:0.5px;background:var(--border);align-self:center;margin-left:8px"></div></div>
+      <div id="profileContainer">
+        <div class="card" style="color: var(--text3); font-size: 12px; font-family: var(--mono); text-align: center; padding: 2rem;">
+          No profile loaded
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let currentHandle = '';
+let feedbackState = {};
+
+function getRatingColor(r) {
+  if (r < 1200) return { bg: 'rgba(136,136,136,0.15)', color: '#888' };
+  if (r < 1400) return { bg: 'rgba(52,211,153,0.12)', color: '#34d399' };
+  if (r < 1600) return { bg: 'rgba(96,165,250,0.12)', color: '#60a5fa' };
+  if (r < 1900) return { bg: 'rgba(167,139,250,0.12)', color: '#a78bfa' };
+  if (r < 2100) return { bg: 'rgba(251,191,36,0.12)', color: '#fbbf24' };
+  if (r < 2400) return { bg: 'rgba(251,146,60,0.12)', color: '#fb923c' };
+  return { bg: 'rgba(248,113,113,0.12)', color: '#f87171' };
+}
+
+async function fetchAll() {
+  const handle = document.getElementById('handleInput').value.trim();
+  if (!handle) return;
+  currentHandle = handle;
+  feedbackState = {};
+
+  document.getElementById('searchBtn').disabled = true;
+  document.getElementById('searchBtn').textContent = 'Loading...';
+
+  showSkeletons();
+  showProfileLoading();
+
+  try {
+    const [recRes, profRes] = await Promise.all([
+      fetch(`${API}/recommend/${handle}?k=10`),
+      fetch(`${API}/profile/${handle}`)
+    ]);
+
+    if (!recRes.ok) {
+      const err = await recRes.json();
+      showError(err.detail || 'Failed to fetch recommendations');
+      showProfileError();
+      return;
+    }
+
+    const recs = await recRes.json();
+    const prof = profRes.ok ? await profRes.json() : null;
+
+    renderProblems(recs);
+    if (prof) renderProfile(prof);
+  } catch(e) {
+    showError('Could not connect to API. Is the server running on localhost:8000?');
+  } finally {
+    document.getElementById('searchBtn').disabled = false;
+    document.getElementById('searchBtn').textContent = 'Analyse →';
+  }
+}
+
+function showSkeletons() {
+  document.getElementById('problemsContainer').innerHTML =
+    '<div class="loading">' + Array(8).fill('<div class="skeleton"></div>').join('') + '</div>';
+}
+
+function showProfileLoading() {
+  document.getElementById('profileContainer').innerHTML =
+    '<div class="card"><div class="skeleton" style="height:140px;border:none;background:var(--surface2)"></div></div>';
+}
+
+function showError(msg) {
+  document.getElementById('problemsContainer').innerHTML =
+    `<div class="error-msg">⚠ ${msg}</div>`;
+}
+
+function showProfileError() {
+  document.getElementById('profileContainer').innerHTML =
+    '<div class="card" style="color:var(--text3);font-size:12px;font-family:var(--mono);text-align:center;padding:2rem">Profile unavailable</div>';
+}
+
+function renderProblems(recs) {
+  if (!recs.length) { showError('No recommendations found.'); return; }
+  document.querySelector('.section-label').innerHTML = `
+    Recommended Problems
+    <div style="flex:1;height:0.5px;background:var(--border);align-self:center;margin:0 8px"></div>
+    <div style="display:flex;gap:8px">
+      <span style="position:relative;display:inline-flex;align-items:center;gap:5px;font-size:10px;font-family:var(--mono);color:var(--accent2);background:var(--accent-glow);border:0.5px solid rgba(124,106,247,0.25);padding:3px 10px;border-radius:100px" class="info-tip">
+        exploit
+        <span style="width:13px;height:13px;border-radius:50%;border:0.5px solid rgba(124,106,247,0.4);display:inline-flex;align-items:center;justify-content:center;font-size:9px;cursor:default;text-transform:none">i</span>
+        <span class="tip-box" style="display:none;position:absolute;top:24px;right:0;background:var(--surface2);border:0.5px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:10px;color:var(--text2);white-space:nowrap;z-index:10">best match for your profile</span>
+      </span>
+      <span style="position:relative;display:inline-flex;align-items:center;gap:5px;font-size:10px;font-family:var(--mono);color:var(--green);background:var(--green-bg);border:0.5px solid rgba(52,211,153,0.25);padding:3px 10px;border-radius:100px" class="info-tip">
+        explore
+        <span style="width:13px;height:13px;border-radius:50%;border:0.5px solid rgba(124,106,247,0.4);display:inline-flex;align-items:center;justify-content:center;font-size:9px;cursor:default;text-transform:none">i</span>
+        <span class="tip-box" style="display:none;position:absolute;top:24px;right:0;background:var(--surface2);border:0.5px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:10px;color:var(--text2);white-space:nowrap;z-index:10">outside your comfort zone</span>
+      </span>
+    </div>
+  `;
+
+  document.querySelectorAll('.info-tip').forEach(tip => {
+    const box = tip.querySelector('.tip-box');
+    tip.addEventListener('mouseenter', () => box.style.display = 'block');
+    tip.addEventListener('mouseleave', () => box.style.display = 'none');
+  });
+  const html = recs.map((p, i) => {
+    const rc = getRatingColor(p.rating);
+    const delay = i * 40;
+    const topTags = p.tags.slice(0, 4).map(t =>
+      `<span class="tag">${t}</span>`
+    ).join('');
+    const extraTags = p.tags.length > 4 ? `<span class="tag">+${p.tags.length - 4}</span>` : '';
+    return `
+    <a class="problem-card" href="${p.url}" target="_blank" style="animation-delay:${delay}ms">
+      <div class="problem-rank">
+        <span class="problem-rank-num">${i+1}</span>
+        #
+      </div>
+      <div>
+        <div style="font-size:17px;color:var(--text2);font-weight:600;margin-bottom:4px">${p.name}</div>
+        <div class="problem-pid">${p.pid}</div>
+        <div class="problem-tags">${topTags}${extraTags}</div>
+        <div class="feedback-btns" onclick="event.preventDefault()">
+          <button class="fb-btn solved ${feedbackState[p.pid]==='solved'?'active-solved':''}"
+            onclick="sendFeedback('${p.pid}', true, this)">✓ solved</button>
+          <button class="fb-btn skipped ${feedbackState[p.pid]==='skipped'?'active-skipped':''}"
+            onclick="sendFeedback('${p.pid}', false, this)">✕ skip</button>
+        </div>
+      </div>
+      <div class="problem-right">
+        <span class="rating-badge" style="background:${rc.bg};color:${rc.color}">${p.rating}</span>
+        <span class="mode-badge mode-${p.mode}">${p.mode}</span>
+      </div>
+    </a>`;
+  }).join('');
+  document.getElementById('problemsContainer').innerHTML = `<div class="problems-list">${html}</div>`;
+}
+
+async function sendFeedback(pid, solved, btn) {
+  feedbackState[pid] = solved ? 'solved' : 'skipped';
+  const allBtns = btn.parentElement.querySelectorAll('.fb-btn');
+  allBtns.forEach(b => { b.classList.remove('active-solved','active-skipped'); });
+  btn.classList.add(solved ? 'active-solved' : 'active-skipped');
+  try {
+    await fetch(`${API}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ handle: currentHandle, pid, solved })
+    });
+  } catch(e) { console.error('Feedback failed', e); }
+}
+
+function renderProfile(prof) {
+  const initials = prof.handle.slice(0,2).toUpperCase();
+  const weakTagsHtml = (prof.weakest_tags || []).slice(0,6).map(t => {
+    const pct = (t.accuracy * 100).toFixed(1);
+    const fill = Math.max(3, t.accuracy * 100);
+    return `<div class="weak-tag-row">
+      <span class="weak-tag-name">${t.tag}</span>
+      <div class="weak-bar-bg"><div class="weak-bar-fill" style="width:${fill}%"></div></div>
+      <span class="weak-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('profileContainer').innerHTML = `
+    <div class="card">
+      <div class="profile-header">
+        <div class="avatar">${initials}</div>
+        <div>
+          <div class="profile-name">${prof.handle}</div>
+          <div class="profile-rating">Rating ${prof.current_rating}</div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Target rating</span>
+        <span class="stat-value">${prof.target_rating}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Unsolved tags</span>
+        <span class="stat-value">${prof.unsolved_tag_count}</span>
+      </div>
+      <div style="
+        margin-top:12px;
+        max-height:120px;
+        overflow-y:auto;
+        border-top:0.5px solid var(--border);
+        padding-top:10px;
+    ">
+        ${(prof.unsolved_tags || []).map(tag => `
+            <div style="
+                display:flex;
+                align-items:center;
+                gap:8px;
+                padding:4px 0;
+            ">
+                <div style="
+                    width:4px;
+                    height:4px;
+                    border-radius:50%;
+                    background:var(--accent);
+                    flex-shrink:0;
+                "></div>
+
+                <span style="
+                    font-size:12px;
+                    font-family:var(--mono);
+                    color:var(--text2);
+                ">
+                    ${tag}
+                </span>
+            </div>
+        `).join('')}
+    </div>
+    </div>
+    <div class="card">
+      <div class="section-label" style="margin-bottom:0.75rem">Weakest Tags</div>
+        ${weakTagsHtml || '...'}
+        <div style="margin-top:14px;padding-top:12px;border-top:0.5px solid var(--border)">
+          <p style="font-size:12px;font-family:var(--mono);color:var(--text3);line-height:1.7">
+            <sup>*</sup> Weakest tags are not ranked based on raw accuracy. Each tag is scored by <em style="font-style:normal;color:var(--text2)">TAG READINESS</em> — a weighted measure of how recently and consistently you have solved problems in that topic. Solves from years ago decay over time, so a tag you once knew well but haven't touched recently will rank as weak. Low readiness means you need practice, not that you are bad at it.
+          </p>
+        </div>
+    </div>
+  `;
+}
+
+document.getElementById('handleInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') fetchAll();
+});
+const fakeProblems = [
+  { pid: '1936-B', name: 'Informatics in MAC', rating: 1400, tags: ['greedy', 'math'] },
+  { pid: '2021-C', name: 'Walks', rating: 1600, tags: ['dp', 'graphs'] },
+  { pid: '1843-F', name: 'Tic-tac-toe', rating: 1900, tags: ['constructive'] },
+  { pid: '1956-D', name: 'Inversion Composition', rating: 1500, tags: ['binary search'] },
+  { pid: '2040-A', name: 'Colored Ball', rating: 1300, tags: ['greedy', 'bitmasks'] },
+  { pid: '1789-C', name: 'Tree Cutting', rating: 1700, tags: ['dfs', 'graphs'] },
+  { pid: '1900-E', name: 'Collapsing', rating: 2000, tags: ['dp', 'math'] },
+  { pid: '1823-B', name: 'Sort with Step', rating: 1200, tags: ['math'] },
+];
+
+function getRatingColorHex(r) {
+  if (r < 1200) return '#888';
+  if (r < 1400) return '#34d399';
+  if (r < 1600) return '#60a5fa';
+  if (r < 1900) return '#a78bfa';
+  if (r < 2100) return '#fbbf24';
+  if (r < 2400) return '#fb923c';
+  return '#f87171';
+}
+
+function spawnCard() {
+  const container = document.getElementById('floatingCards');
+  const prob = fakeProblems[Math.floor(Math.random() * fakeProblems.length)];
+  const color = getRatingColorHex(prob.rating);
+
+  const card = document.createElement('div');
+  card.style.cssText = `
+    position:absolute;
+    width:240px;
+    background:var(--surface);
+    border:0.5px solid var(--border2);
+    border-radius:12px;
+    padding:12px 14px;
+    left:${Math.random() * 60}px;
+    bottom:-100px;
+    opacity:0;
+    transition:none;
+    pointer-events:none;
+  `;
+
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-family:var(--mono);font-size:11px;color:var(--accent2)">${prob.pid}</span>
+      <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:${color};background:${color}22;padding:2px 7px;border-radius:5px">${prob.rating}</span>
+    </div>
+    <div style="font-size:12px;color:var(--text);margin-bottom:8px;font-weight:500">${prob.name}</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap">
+      ${prob.tags.map(t => `<span style="font-size:9px;font-family:var(--mono);padding:2px 7px;border-radius:100px;border:0.5px solid var(--border2);color:var(--text3)">${t}</span>`).join('')}
+    </div>
+  `;
+
+  container.appendChild(card);
+
+  const duration = 5000 + Math.random() * 3000;
+
+  requestAnimationFrame(() => {
+    card.style.transition = `bottom ${duration}ms linear, opacity 0.5s ease`;
+    card.style.bottom = '400px';
+    card.style.opacity = '0.75';
+  });
+
+  setTimeout(() => {
+    card.style.opacity = '0';
+  }, duration - 600);
+
+  setTimeout(() => {
+    card.remove();
+  }, duration + 100);
+}
+
+spawnCard();
+setInterval(spawnCard, 1800);
+</script>
+</body>
+</html>
